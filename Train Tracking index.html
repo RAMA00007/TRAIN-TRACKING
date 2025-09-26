@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Train Tracker — Demo</title>
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --muted:#9aa4b2; --accent:#38bdf8; --glass:rgba(255,255,255,0.04);
+      --success:#22c55e; --danger:#fb7185; --mono:ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,var(--bg),#071022); color:#e6eef6;}
+
+    .app{max-width:1100px;margin:36px auto;padding:28px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:14px;box-shadow:0 8px 30px rgba(2,6,23,0.6);}
+    header{display:flex;gap:16px;align-items:center;margin-bottom:20px}
+    h1{font-size:20px;margin:0}
+    .controls{margin-left:auto;display:flex;gap:10px;align-items:center}
+    input[type=text]{background:var(--card);border:1px solid rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;color:inherit}
+    button{background:linear-gradient(90deg,var(--accent),#60a5fa);border:none;padding:8px 12px;border-radius:10px;color:#012637;font-weight:600;cursor:pointer}
+
+    .main{display:grid;grid-template-columns:1fr 340px;gap:18px}
+
+    /* TRACK VIEW */
+    .track-card{background:var(--card);padding:18px;border-radius:12px;border:1px solid var(--glass)}
+    .track-canvas{height:360px;background:linear-gradient(180deg,#04122222,#04122255);border-radius:10px;padding:16px;position:relative;overflow:hidden}
+    .line{position:absolute;left:40px;right:40px;top:50%;height:6px;background:linear-gradient(90deg,#0ea5a9,#06b6d4);border-radius:6px;transform:translateY(-50%)}
+
+    .station{position:absolute;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+    .station .dot{width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid #0b1220}
+    .station .label{font-size:12px;color:var(--muted);white-space:nowrap}
+
+    .train{position:absolute;top:50%;transform:translate(-50%,-50%);display:flex;gap:8px;align-items:center;pointer-events:auto}
+    .train .icon{width:40px;height:28px;border-radius:6px;background:linear-gradient(180deg,#ffffff,#dbeafe);color:#012637;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--mono)}
+    .train .bubble{background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:8px;font-size:12px;color:#e6eef6}
+
+    /* SIDEBAR */
+    .sidebar{display:flex;flex-direction:column;gap:12px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:12px;border-radius:10px;border:1px solid var(--glass)}
+    .small{font-size:13px;color:var(--muted)}
+
+    .list{display:flex;flex-direction:column;gap:10px}
+    .list .item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;background:transparent}
+    .eta{font-weight:700}
+
+    footer{margin-top:16px;font-size:13px;color:var(--muted);}
+
+    /* responsive */
+    @media (max-width:880px){.main{grid-template-columns:1fr}.sidebar{order:2}.track-card{order:1}}
+  </style>
+</head>
+<body>
+  <div class="app" role="application">
+    <header>
+      <div>
+        <h1>Train Tracker — demo</h1>
+        <div class="small">Simulated live positions · HTML/CSS/JS sample</div>
+      </div>
+
+      <div class="controls">
+        <input id="trainSearch" type="text" placeholder="Enter train number (e.g. 12507)" />
+        <button id="btnLocate">Locate</button>
+      </div>
+    </header>
+
+    <div class="main">
+      <section class="track-card">
+        <div class="track-canvas" id="canvas" aria-label="Track visualization">
+          <div class="line"></div>
+          <!-- stations will be injected here -->
+        </div>
+        <footer class="small">Note: this is a front-end demo — replace the simulated data with a real API for production.</footer>
+      </section>
+
+      <aside class="sidebar">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong id="trainTitle">Train 12507</strong><div class="small">Mumbai - Pune Express (simulated)</div></div>
+            <div class="small">Status: <span id="trainStatus">On time</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="small">Upcoming stations</div>
+          <div class="list" id="upcomingList">
+            <!-- upcoming list -->
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="small">Controls</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="btnPlay">Play</button>
+            <button id="btnPause">Pause</button>
+            <button id="btnReset">Reset</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Simulated data ----------
+    const stations = [
+      {code:'STN1',name:'Central',pos:6},
+      {code:'STN2',name:'South Junction',pos:22},
+      {code:'STN3',name:'Old Town',pos:38},
+      {code:'STN4',name:'Riverdale',pos:54},
+      {code:'STN5',name:'Hillview',pos:70},
+      {code:'STN6',name:'Harbor',pos:86},
+    ];
+
+    // train state: position is a percentage along the line (0..100)
+    const trains = [
+      {num:'12507',name:'Mumbai-Pune Express',pos:18,speedKmph:60,delayMin:0},
+      {num:'22411',name:'Coastal Rapid',pos:62,speedKmph:80,delayMin:5},
+    ];
+
+    const canvas = document.getElementById('canvas');
+    const upcomingList = document.getElementById('upcomingList');
+    const trainTitle = document.getElementById('trainTitle');
+    const trainStatus = document.getElementById('trainStatus');
+
+    function createStationEl(s){
+      const el = document.createElement('div');
+      el.className='station';
+      el.style.left = `calc(${s.pos}% )`;
+      el.innerHTML = `<div class="dot"></div><div class="label">${s.name}</div>`;
+      return el;
+    }
+
+    function createTrainEl(t){
+      const el = document.createElement('div');
+      el.className='train';
+      el.dataset.num = t.num;
+      el.style.left = t.pos + '%';
+      el.innerHTML = `<div class="icon">🚆</div><div class="bubble">${t.num}</div>`;
+      return el;
+    }
+
+    // render stations & trains
+    function renderAll(){
+      // clear existing
+      canvas.querySelectorAll('.station,.train').forEach(n=>n.remove());
+      // stations
+      stations.forEach(s=>canvas.appendChild(createStationEl(s)));
+      // trains
+      trains.forEach(t=>canvas.appendChild(createTrainEl(t)));
+    }
+
+    // compute upcoming stations for a train
+    function upcomingForTrain(tr){
+      const upcoming = stations.filter(s=>s.pos>tr.pos).slice(0,4);
+      return upcoming.map((s,i)=>({station:s,eta:estimateETA(tr,s)}));
+    }
+
+    // rough ETA estimate in minutes assuming straight-line distance percent -> kms (for demo)
+    function estimateETA(tr,station){
+      const percentToKm = 1.2; // arbitrary scale for demo
+      const km = (station.pos - tr.pos) * percentToKm;
+      const speed = Math.max(tr.speedKmph,10); // avoid div0
+      const hours = km / speed;
+      const minutes = Math.round(hours * 60) + tr.delayMin;
+      return Math.max(minutes,0);
+    }
+
+    // update sidebar for selected train (default first)
+    let selectedTrain = trains[0];
+    function updateSidebar(){
+      trainTitle.textContent = `${selectedTrain.num} — ${selectedTrain.name}`;
+      trainStatus.textContent = selectedTrain.delayMin>10? 'Delayed':'On time';
+      upcomingList.innerHTML = '';
+      const upcoming = upcomingForTrain(selectedTrain);
+      if(upcoming.length===0){ upcomingList.innerHTML = '<div class="small">No upcoming stations — reached end of line</div>'; return }
+      upcoming.forEach(u=>{
+        const it = document.createElement('div');
+        it.className='item';
+        it.innerHTML = `<div><strong>${u.station.name}</strong><div class="small">${u.station.code}</div></div><div class="eta">${u.eta} min</div>`;
+        upcomingList.appendChild(it);
+      });
+    }
+
+    // animation loop
+    let anim = null; let playing = true;
+    function step(dt=1){
+      if(!playing) return;
+      // advance trains
+      trains.forEach(t=>{
+        const delta = (t.speedKmph/60) * 0.08 * (dt); // small scale per tick
+        t.pos = Math.min(98, t.pos + delta);
+      });
+      renderAll();
+      updateSidebar();
+    }
+
+    // controls
+    document.getElementById('btnPlay').addEventListener('click',()=>{playing=true});
+    document.getElementById('btnPause').addEventListener('click',()=>{playing=false});
+    document.getElementById('btnReset').addEventListener('click',()=>{trains.forEach((t,i)=>t.pos = i===0?18:62); renderAll(); updateSidebar();});
+
+    document.getElementById('btnLocate').addEventListener('click',()=>{
+      const q = document.getElementById('trainSearch').value.trim();
+      if(!q) return alert('Enter a train number to locate (demo)');
+      const found = trains.find(t=>t.num===q);
+      if(!found) return alert('Train not found in demo dataset');
+      selectedTrain = found; updateSidebar();
+      // highlight
+      document.querySelectorAll('.train').forEach(n=>n.style.opacity= n.dataset.num===found.num?1:0.3);
+    });
+
+    // initial render
+    renderAll(); updateSidebar();
+
+    // run a setInterval style loop
+    setInterval(()=>step(1), 800);
+
+    // accessibility: keyboard focus
+    document.addEventListener('keydown',e=>{
+      if(e.key===' '){playing=!playing}
+    });
+  </script>
+</body>
+</html>
