@@ -1,2 +1,2 @@
 # TRAIN-TRACKING
-To check the train status
+To check the Train Status
