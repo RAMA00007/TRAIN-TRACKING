@@ -1,2 +1,2 @@
 # TRAIN STATUS TRACKING
-To check the Train Status
+To track the status of current and upcoming locations of train.
