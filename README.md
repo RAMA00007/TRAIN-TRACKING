@@ -1,2 +1,2 @@
 # TRAIN STATUS TRACKING
-To track the status of current and upcoming stations of a train by using its train number. After entered the train number on the dedicated web based application, it will display the upcoming staion names with their estimated reaching time to the station. It can be helpful for those who are not aware before of the particular travelling locations.  
+Tracking the status(Location name) of current and upcoming stations of a train by using its PNR number. By entering the train's PNR on the dedicated web based application, it displays the upcoming station/platform's name with their estimated reaching time. It can be very helpful for those who are not aware of the particular travelling location(s) before.  
